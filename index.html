@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 버스 도착 정보</title>
+    <style>
+        :root { --primary: #0056b3; --danger: #e63946; --bg: #f8f9fa; --card-bg: #ffffff; --text: #333333; }
+        body { font-family: 'Pretendard', sans-serif; background-color: var(--bg); margin: 0; padding: 0; color: var(--text); }
+        .header { background: var(--primary); color: white; padding: 25px 20px; text-align: center; border-bottom-left-radius: 25px; border-bottom-right-radius: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .header h2 { margin: 0; font-size: 1.6em; word-break: keep-all; }
+        .container { padding: 20px; max-width: 600px; margin: 0 auto; }
+        .bus-card { background: var(--card-bg); padding: 20px; margin-bottom: 15px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); cursor: pointer; border-left: 6px solid var(--primary); transition: 0.2s; }
+        .bus-card:active { transform: scale(0.98); }
+        .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .bus-no { font-size: 1.5em; font-weight: 800; color: var(--primary); }
+        .badge { background: var(--danger); color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.9em; animation: pulse 2s infinite; }
+        .desc { font-size: 0.95em; color: #666; }
+        .route-info { display: none; margin-top: 15px; padding: 15px; background: #f1f3f5; border-radius: 10px; font-size: 0.85em; line-height: 2; border: 1px solid #e9ecef; }
+        .route-info.active { display: block; }
+        .status { text-align: center; color: #888; margin-top: 50px; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(230, 57, 70, 0); } 100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0); } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2 id="station-name">정류장 정보 불러오는 중...</h2>
+        <p style="margin: 10px 0 0; font-size: 0.9em; opacity: 0.8;">실시간 버스 도착 정보</p>
+        <p style="margin: 5px 0 0; font-size: 0.75em; opacity: 0.6;">※ 실시간 데이터는 실제와 5분 내외 오차가 있을 수 있습니다.</p>
+    </div>
+    <div class="container" id="bus-list"><div class="status">버스를 찾는 중입니다... 🚌</div></div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const cityCode = urlParams.get('cityCode') || '35010';
+        const nodeId = urlParams.get('nodeId') || 'JUB306100792';
+        const API_KEY = '598c44e30084ea8fa0ca3a2889d5c925ee6ba061080cbed38baf2e8150056039';
+
+        async function fetchBusInfo() {
+            const listDiv = document.getElementById('bus-list');
+            const stationNameEl = document.getElementById('station-name');
+            const url = `https://apis.data.go.kr/1613000/ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList?serviceKey=${encodeURIComponent(API_KEY)}&cityCode=${cityCode}&nodeId=${nodeId}&_type=json&numOfRows=10`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                const raw = data.response?.body?.items?.item || [];
+                const items = Array.isArray(raw) ? raw : [raw];
+
+                if (!items.length || !items[0]) {
+                    listDiv.innerHTML = '<div class="status">현재 도착 예정 버스가 없습니다.</div>';
+                } else {
+                    stationNameEl.innerText = items[0].nodenm + ' 정류장';
+                    items.sort((a, b) => a.arrtime - b.arrtime);
+                    listDiv.innerHTML = items.map((bus, idx) => `
+                        <div class="bus-card" onclick="toggleRoute('${bus.routeid}', 'route-${idx}')">
+                            <div class="card-top">
+                                <div class="bus-no">🚌 ${bus.routeno}번</div>
+                                <div class="badge">${Math.floor(bus.arrtime/60) === 0 ? '곧 도착' : Math.floor(bus.arrtime/60)+'분 후'}</div>
+                            </div>
+                            <div class="desc">📍 ${bus.arrprevstationcnt > 0 ? bus.arrprevstationcnt - 1 : 0}정거장 남음</div>
+                            <div id="route-${idx}" class="route-info">노선을 보려면 터치하세요.</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) { console.log("갱신 대기..."); }
+            setTimeout(fetchBusInfo, 60000); // 1분 주기로 완화
+        }
+
+        async function toggleRoute(routeId, elementId) {
+            const div = document.getElementById(elementId);
+            if (div.classList.toggle('active')) {
+                div.innerHTML = "로딩 중...";
+                const rUrl = `https://apis.data.go.kr/1613000/BusRouteInfoInqireService/getRouteAcctoThrghSttnList?serviceKey=${encodeURIComponent(API_KEY)}&cityCode=${cityCode}&routeId=${routeId}&_type=json&numOfRows=100`;
+                const pUrl = `https://apis.data.go.kr/1613000/BusLcInfoInqireService/getRouteLocationList?serviceKey=${encodeURIComponent(API_KEY)}&cityCode=${cityCode}&routeId=${routeId}&_type=json`;
+                
+                try {
+                    const [rRes, pRes] = await Promise.all([fetch(rUrl).then(r=>r.json()), fetch(pUrl).then(r=>r.json())]);
+                    const st = rRes.response?.body?.items?.item || [];
+                    const lc = pRes.response?.body?.items?.item || [];
+                    const rArr = Array.isArray(st) ? st : [st];
+                    const lArr = Array.isArray(lc) ? lc : [lc];
+                    
+                    div.innerHTML = rArr.map(s => {
+                        const hasBus = lArr.some(b => b && b.nodeid === s.nodeid);
+                        if (s.nodeid === nodeId) return `<b style="color:var(--danger)">📍현재 정류장</b>`;
+                        return hasBus ? `<b>🚌${s.nodenm}</b>` : s.nodenm;
+                    }).join(' → ');
+                } catch (e) { div.innerHTML = "데이터 지연 중..."; }
+            }
+        }
+        fetchBusInfo();
+    </script>
+</body>
+</html>
