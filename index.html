@@ -16,8 +16,10 @@
         .bus-no { font-size: 1.5em; font-weight: 800; color: var(--primary); }
         .badge { background: var(--danger); color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.9em; animation: pulse 2s infinite; }
         .desc { font-size: 0.95em; color: #666; }
-        .route-info { display: none; margin-top: 15px; padding: 15px; background: #f1f3f5; border-radius: 10px; font-size: 0.85em; color: #444; line-height: 2.2; word-break: keep-all; border: 1px solid #e9ecef; }
+        .route-info { display: none; margin-top: 15px; padding: 18px; background: #fdfdfd; border-radius: 12px; font-size: 0.9em; color: #555; line-height: 2.5; word-break: keep-all; border: 1px solid #eee; }
         .route-info.active { display: block; animation: fadeIn 0.3s ease; }
+        /* 현재 정류장 강조 스타일 */
+        .current-stop { background: var(--primary); color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 1.15em; display: inline-block; box-shadow: 0 2px 5px rgba(0,86,179,0.3); margin: 0 4px; }
         .status { text-align: center; color: #888; margin-top: 50px; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(230, 57, 70, 0); } 100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
@@ -27,7 +29,6 @@
     <div class="header">
         <h2 id="station-name">정보 불러오는 중...</h2>
         <p style="margin: 10px 0 0; font-weight: 500;">실시간 버스 도착 정보</p>
-        <p style="margin: 5px 0 0; font-size: 0.75em; opacity: 0.7;">※ 실시간 정보로 5분 내외의 오차가 발생할 수 있습니다.</p>
     </div>
     <div class="container" id="bus-list">
         <div class="status">버스를 찾는 중입니다... 🚌</div>
@@ -49,8 +50,6 @@
             try {
                 const response = await fetch(url);
                 const data = await response.json();
-                
-                // 데이터 보따리 추출 로직 보강
                 const rawItems = data.response?.body?.items?.item || data.response?.body?.items || [];
                 const items = Array.isArray(rawItems) ? rawItems : (rawItems ? [rawItems] : []);
 
@@ -100,22 +99,23 @@
             try {
                 const response = await fetch(routeUrl);
                 const data = await response.json();
-                
-                // 노선 보따리 추출 로직 보강
                 const rawSt = data.response?.body?.items?.item || data.response?.body?.items || [];
                 const routeArray = Array.isArray(rawSt) ? rawSt : (rawSt ? [rawSt] : []);
 
                 if (routeArray.length === 0 || !routeArray[0]) {
-                    routeDiv.innerHTML = "노선 정보를 가져올 수 없습니다. (서버 응답 지연)";
+                    routeDiv.innerHTML = "노선 정보를 가져올 수 없습니다.";
                     return;
                 }
 
                 routeDiv.innerHTML = routeArray.map(st => {
-                    if (st.nodeid === nodeId) return `<span style="color:var(--danger);font-weight:bold;">📍 현재 정류장</span>`;
+                    // 현재 정류장인 경우 이름을 강조된 박스에 넣어 출력
+                    if (st.nodeid === nodeId) {
+                        return `<span class="current-stop">${st.nodenm}</span>`;
+                    }
                     return st.nodenm;
                 }).join(' → ');
             } catch (e) { 
-                routeDiv.innerHTML = "데이터 지연으로 노선도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."; 
+                routeDiv.innerHTML = "데이터 지연으로 노선도를 불러오지 못했습니다."; 
             }
         }
 
