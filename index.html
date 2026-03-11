@@ -49,8 +49,10 @@
             try {
                 const response = await fetch(url);
                 const data = await response.json();
+                
+                // 데이터 보따리 추출 로직 보강
                 const rawItems = data.response?.body?.items?.item || data.response?.body?.items || [];
-                const items = Array.isArray(rawItems) ? rawItems : [rawItems];
+                const items = Array.isArray(rawItems) ? rawItems : (rawItems ? [rawItems] : []);
 
                 if (items.length === 0 || !items[0]) {
                     listDiv.innerHTML = '<div class="status">현재 도착 예정인 버스가 없습니다.</div>';
@@ -60,7 +62,6 @@
                     
                     listDiv.innerHTML = items.map((bus, index) => {
                         const min = Math.floor((bus.arrtime || 0) / 60);
-                        // 하림님 요청: 3분 미만은 '곧 도착'으로 표시
                         const timeText = min < 3 ? '곧 도착' : min + '분 후';
                         const remainStations = (bus.arrprevstationcnt || 1) > 0 ? (bus.arrprevstationcnt || 1) - 1 : 0;
 
@@ -79,7 +80,7 @@
             } catch (e) { console.log("갱신 대기 중..."); }
             finally { 
                 if (timerId) clearTimeout(timerId);
-                timerId = setTimeout(fetchBusInfo, 60000); // Vercel 한도 고려 1분 주기
+                timerId = setTimeout(fetchBusInfo, 60000); 
             }
         }
 
@@ -91,7 +92,6 @@
             }
             routeDiv.classList.add('active');
             
-            // 데이터가 이미 불러와져 있다면 다시 부르지 않음
             if (routeDiv.innerHTML !== "노선을 보려면 터치하세요.") return;
             routeDiv.innerHTML = "노선도 불러오는 중...";
 
@@ -100,11 +100,13 @@
             try {
                 const response = await fetch(routeUrl);
                 const data = await response.json();
+                
+                // 노선 보따리 추출 로직 보강
                 const rawSt = data.response?.body?.items?.item || data.response?.body?.items || [];
-                const routeArray = Array.isArray(rawSt) ? rawSt : [rawSt];
+                const routeArray = Array.isArray(rawSt) ? rawSt : (rawSt ? [rawSt] : []);
 
                 if (routeArray.length === 0 || !routeArray[0]) {
-                    routeDiv.innerHTML = "노선 정보를 가져올 수 없습니다.";
+                    routeDiv.innerHTML = "노선 정보를 가져올 수 없습니다. (서버 응답 지연)";
                     return;
                 }
 
@@ -113,7 +115,7 @@
                     return st.nodenm;
                 }).join(' → ');
             } catch (e) { 
-                routeDiv.innerHTML = "데이터 지연으로 노선도를 불러오지 못했습니다."; 
+                routeDiv.innerHTML = "데이터 지연으로 노선도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."; 
             }
         }
 
